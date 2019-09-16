@@ -74,13 +74,13 @@ bool DECODER::decode(const std::string &data, nlohmann::json *result) {
     size_t valid_files = 0;
     (*result)["confirmations"] = 0;
     (*result)["graffiti"] = false;
+    (*result)["files"] = nlohmann::json::array();
 
     if (tx.count("confirmations") && tx["confirmations"].is_number()) {
         (*result)["confirmations"] = tx["confirmations"];
     }
 
     if (!graffiti.empty()) {
-        (*result)["files"] = nlohmann::json::array();
         nlohmann::json chunkbuf = nlohmann::json::array();
 
         while (!graffiti.empty()) {
@@ -108,7 +108,11 @@ bool DECODER::decode(const std::string &data, nlohmann::json *result) {
                 std::vector<unsigned char> errors;
 
                 if (!program->syspipe((const unsigned char *) &payload[0],
-                    payload.size(), "identify -verbose - 2>&1 > /dev/null", &errors)) {
+                    payload.size(),
+                    "docker run --memory=64m --memory-swap=64m "
+                    "--memory-swappiness=0 --rm -i v4tech/imagemagick sh -c "
+                    "'identify -verbose - <&0 2>&1 1>/dev/null' 2>/dev/null",
+                    &errors)) {
                     (*result)["error"] = "failed to identify file";
                     return false;
                 }
@@ -127,7 +131,9 @@ bool DECODER::decode(const std::string &data, nlohmann::json *result) {
                 if (old_sz/10 + new_sz >= old_sz) {
                     payload.push_back(0);
                     const char *str = (const char *) &payload[0];
-                    chunk["unicode"] = str;
+                    if (unicode_len) {
+                        chunk["unicode"] = prune_utf8(str, unicode_len);
+                    }
 
                     if (new_sz <= 4) {
                         chunk["error"] = std::string("too short");
@@ -138,6 +144,9 @@ bool DECODER::decode(const std::string &data, nlohmann::json *result) {
                     else if (hex2bin(str)) {
                         chunk["error"] = std::string("hex string");
                     }
+                    else if (nlohmann::json::accept(str)) {
+                        chunk["error"] = std::string("json string");
+                    }
                     else if (validate_bitcoin_address(str, nullptr, 0) >= 0) {
                         chunk["error"] = std::string("bitcoin address");
                     }
@@ -147,22 +156,37 @@ bool DECODER::decode(const std::string &data, nlohmann::json *result) {
                 else chunk["error"] = std::string("not plaintext");
             }
 
+            chunk["hash"] = std::string(
+                (const char *) (&ripemd160(&payload[0], payload.size())[0])
+            );
+
             if (!chunk.count("error")) {
                 valid_files++;
-                chunk["hash"] = std::string(
-                    (const char *) (&ripemd160(&payload[0], payload.size())[0])
-                );
 
-                chunk["content"] = bin2hex(
-                    (const unsigned char *) &payload[0], payload.size()
-                );
+                if (content) {
+                    chunk["content"] = bin2hex(
+                        (const unsigned char *) &payload[0], payload.size()
+                    );
+                }
             }
 
             graffiti.pop();
             if (chunk.count("error") && !verbose) continue;
 
+            if (!file_hash.empty()
+            && (!chunk.count("hash") || file_hash.compare(chunk["hash"]))) {
+                continue;
+            }
+
             // Let's ignore excess chunks to avoid potential DoS attacks.
-            if (chunkbuf.size() < 32) chunkbuf.push_back(chunk);
+            if (chunkbuf.size() < 256) chunkbuf.push_back(chunk);
+            else break;
+
+            if (!file_hash.empty()
+            && (chunk.count("hash") && !file_hash.compare(chunk["hash"]))) {
+                // We have found the chunk we were looking for.
+                break;
+            }
         }
 
         (*result)["files"].swap(chunkbuf);
@@ -287,6 +311,24 @@ bool DECODER::get_opret_segments(std::vector<unsigned char> &bytes, std::map<siz
 
 void DECODER::set_verbose(bool value) {
     verbose = value;
+}
+
+void DECODER::set_content(bool value) {
+    content = value;
+}
+
+void DECODER::set_file_hash(const std::string &hash) {
+    file_hash.assign(hash);
+
+    std::transform(file_hash.begin(), file_hash.end(), file_hash.begin(),
+        [](unsigned char c){
+            return std::tolower(c);
+        }
+    );
+}
+
+void DECODER::set_unicode_len(size_t value) {
+    unicode_len = value;
 }
 
 bool DECODER::get_mimetype(const unsigned char *bytes, size_t len, std::string &mimetype) const {

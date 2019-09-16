@@ -27,6 +27,9 @@ void PROGRAM::run() {
 
     DECODER decoder(this, log);
     decoder.set_verbose(options->verbose);
+    decoder.set_content(options->content);
+    decoder.set_file_hash(options->hash);
+    decoder.set_unicode_len(options->unicode);
 
     std::string input(std::istreambuf_iterator<char>(std::cin), {});
     nlohmann::json result = nlohmann::json();
@@ -77,7 +80,7 @@ bool PROGRAM::init(int argc, char **argv) {
         "tail",
         "tr",
         "file",
-        "identify"
+        "docker"
     };
 
     for (const char *prg : prerequisites) {
@@ -85,6 +88,19 @@ bool PROGRAM::init(int argc, char **argv) {
         std::snprintf(buf, sizeof(buf), "which %s > /dev/null 2>&1", prg);
         if (system(buf) != 0) {
             log(get_name(), "%s: command not found", prg);
+            return false;
+        }
+    }
+
+    constexpr const char *docker_images[] = {
+        "v4tech/imagemagick:latest"
+    };
+
+    for (const char *img : docker_images) {
+        char buf[256];
+        std::snprintf(buf, sizeof(buf), "docker inspect --type=image %s > /dev/null 2>&1", img);
+        if (system(buf) != 0) {
+            log(get_name(), "%s: docker image not found", img);
             return false;
         }
     }
