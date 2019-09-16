@@ -32,34 +32,12 @@ var CG_READ_JOBS = {
 
 var CG_READ_APIS = [
     {
-        domain       : "bchsvexplorer.com",
-        request      : "https://bchsvexplorer.com/api/tx/%s",
-        request_addr : "https://bchsvexplorer.com/api/addr/%s",
-        link         : "https://bchsvexplorer.com/tx/%s",
-        link_addr    : "https://bchsvexplorer.com/address/%s",
+        domain       : "https://chainz.cryptoid.info/uno/",
+        request      : "https://chainz.cryptoid.info/uno/api.dws?q=txinfo&t=%s,
+        request_addr : "https://chainz.cryptoid.info/uno/api.dws?q=addresses&a=%s",
+        link         : "https://chainz.cryptoid.info/uno/tx.dws?%s",
+        link_addr    : "https://chainz.cryptoid.info/uno/address.dws?%s",
         extract      : "cg_read_extract_insight",
-        delay        : 0,
-        max_delay    : 2*CG_READ_PPS,
-        down         : false,
-        fails        : 0
-    },
-    {
-        domain       : "blockchair.com",
-        request      : "https://api.blockchair.com/bitcoin-sv/dashboards/transaction/%s",
-        link         : "https://blockchair.com/bitcoin-sv/transaction/%s",
-        link_addr    : "https://blockchair.com/bitcoin-sv/address/%s",
-        extract      : "cg_read_extract_blockchair_dashboard",
-        delay        : 0,
-        max_delay    : 2*CG_READ_PPS,
-        down         : false,
-        fails        : 0
-    },
-    {
-        domain       : "bsv.btc.com",
-        request      : "https://bsv-chain.api.btc.com/v3/tx/%s?verbose=3",
-        link         : "https://bsv.btc.com/%s",
-        link_addr    : "https://bsv.btc.com/%s",
-        extract      : "cg_read_extract_btc",
         delay        : 0,
         max_delay    : 2*CG_READ_PPS,
         down         : false,
